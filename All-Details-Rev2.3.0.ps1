@@ -8,6 +8,9 @@
 #
 # Change List
 #
+# (2.4.0)
+# 1. Added Public Folder functionality
+#
 # (2.3.0)
 # 1. Added Membership for Security Groups rather than just names
 #
@@ -159,6 +162,42 @@ $sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
 
 # Export shared mailboxes with delegated mailbox access to Excel
 $sharedMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[2] -Title "Shared Mailboxes with Delegated Access" -BoldTopRow -PassThru  | Out-Null
+
+# List of public folder mailboxes with their aliases and email addresses
+Write-Host "Fetching Public Folder Mailboxes list with aliases and email addresses..."
+$publicFolderMailboxes = Get-Mailbox -PublicFolder | foreach {
+    [PSCustomObject]@{
+        "MailboxName" = $_.DisplayName
+        "Alias" = $_.Alias
+        "EmailAddresses" = ($_.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', '  # Filter SMTP addresses and join them into a single string
+    }
+}
+
+# Check if a worksheet named "PublicFolderMailboxes" already exists, and remove it if it does
+$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolderMailboxes"]
+if ($existingWorksheet) {
+    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
+}
+
+# Add a new worksheet for public folder mailboxes
+$publicFolderSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolderMailboxes")
+
+# Add headers
+$publicFolderSheet.Cells[1, 1].Value = "Mailbox Name"
+$publicFolderSheet.Cells[1, 2].Value = "Alias"
+$publicFolderSheet.Cells[1, 3].Value = "Email Addresses"
+
+# Fill the sheet with the public folder mailboxes data
+$row = 2
+foreach ($mailbox in $publicFolderMailboxes) {
+    $publicFolderSheet.Cells[$row, 1].Value = $mailbox.MailboxName
+    $publicFolderSheet.Cells[$row, 2].Value = $mailbox.Alias
+    $publicFolderSheet.Cells[$row, 3].Value = $mailbox.EmailAddresses
+    $row++
+}
+
+# Export public folder mailboxes to Excel
+$publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolderMailboxes" -Title "Public Folder Mailboxes with Aliases and Email Addresses" -BoldTopRow -PassThru | Out-Null
 
 # List of distribution lists with members
 Write-Host "Fetching Distribution Group lists with members..."
