@@ -37,22 +37,19 @@ $logFile = "C:\Temp\megascript_debug.txt"
 # Start the transcript to capture all output and errors
 Start-Transcript -Path $logFile -Append
 
-# Install ImportExcel module if not already installed
+# Install necessary modules if not already installed
 if (-not (Get-Module -Name ImportExcel -ListAvailable)) {
     Install-Module -Name ImportExcel
 }
 
-# Install ExchangeOnline module if not already installed
 if (-not (Get-Module -Name ExchangeOnlineManagement -ListAvailable)) {
     Install-Module -Name ExchangeOnlineManagement
 }
 
-# Install AzureAD module if not already installed
 if (-not (Get-Module -Name AzureAD -ListAvailable)) {
     Install-Module -Name AzureAD
 }
 
-# Install MSOnline module if not already installed
 if (-not (Get-Module -Name MSOnline -ListAvailable)) {
     Install-Module -Name MSOnline
 }
@@ -60,15 +57,10 @@ if (-not (Get-Module -Name MSOnline -ListAvailable)) {
 # Import the module
 Import-Module ImportExcel
 
-# Prompt for Exchange Online credentials
-#$credential = Get-Credential -Message "Enter your Exchange Online admin credentials"
-
-
 Write-Host "Connecting To Exchange Online, AzureAD & MsolService..."
-# Connect to Required Modules
-Connect-ExchangeOnline #-Credential $credential
-Connect-AzureAD #-Credential $credential
-Connect-MsolService #-Credential $credential
+Connect-ExchangeOnline
+Connect-AzureAD
+Connect-MsolService
 
 Write-Host "The output will be saved to your desktop"
 
@@ -78,7 +70,6 @@ Start-Sleep 2
 $fileName = Read-Host -Prompt "Enter the file name (without extension):"
 $filePath = [System.IO.Path]::Combine([System.Environment]::GetFolderPath("Desktop"), "$fileName.xlsx")
 
-
 # Define worksheet names
 $worksheets = @(
     "UserMailboxes_DelegatedAccess",
@@ -86,56 +77,16 @@ $worksheets = @(
     "SharedMailboxes_DelegatedAccess",
     "DistributionLists_Members",
     "TeamsGroups_Members",
-    "Security_Groups"
+    "Security_Groups",
+    "PublicFolderMailboxes",
+    "PublicFolders"
 )
-
 
 # Create an Excel package
 $excelPackage = New-Object OfficeOpenXml.ExcelPackage
 $worksheets | ForEach-Object {
     $excelPackage.Workbook.Worksheets.Add($_) | Out-Null
 }
-
-
-# List of user mailboxes with any mailbox access
-Write-Host "Fetching User Mailboxes with Delegated Access list..."
-$userMailboxes = Get-Mailbox | foreach {
-    $mailbox = $_.DisplayName
-    $accesses = @()
-    
-    # Fetch all mailbox permissions
-    $permissions = Get-MailboxPermission -Identity $_.Identity -ErrorAction SilentlyContinue
-    if ($permissions) {
-        foreach ($permission in $permissions) {
-            $accesses += [PSCustomObject]@{
-                "Mailbox" = $mailbox
-                "User" = $permission.User
-                "AccessRights" = $permission.AccessRights -join ', '  # Convert array to comma-separated string
-            }
-        }
-    } else {
-        Write-Host "No mailbox access found for mailbox: $mailbox"
-    }
-    
-    $accesses
-}
-
-# Export user mailboxes with delegated mailbox access to Excel
-$userMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[0] -Title "User Mailboxes with Delegated Access" -BoldTopRow -PassThru | Out-Null
-
-
-
-# List of accounts with assigned licenses
-Write-Host "Fetching Licensed Users list..."
-$licensedAccounts = Get-MsolUser -All | where {$_.isLicensed -eq "True"} | foreach {
-    [PSCustomObject]@{
-        "UPN" = $_.UserPrincipalName
-        "License" = ($_.Licenses | ForEach-Object { $_.AccountSkuId }) -join ', '  # Convert array to comma-separated string
-    }
-}
-
-# Export licensed accounts to Excel
-$licensedAccounts | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[1] -Title "Licensed Accounts" -BoldTopRow -PassThru  | Out-Null
 
 # List of shared mailboxes with any mailbox access
 Write-Host "Fetching Shared Mailboxes lists with members..."
@@ -163,45 +114,6 @@ $sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
 # Export shared mailboxes with delegated mailbox access to Excel
 $sharedMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[2] -Title "Shared Mailboxes with Delegated Access" -BoldTopRow -PassThru  | Out-Null
 
-# List of public folder mailboxes with their aliases and email addresses
-Write-Host "Fetching Public Folder Mailboxes list with aliases and email addresses..."
-$publicFolderMailboxes = Get-Mailbox -PublicFolder | foreach {
-    [PSCustomObject]@{
-        "MailboxName" = $_.DisplayName
-        "Alias" = $_.Alias
-        "EmailAddresses" = ($_.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', '  # Filter SMTP addresses and join them into a single string
-    }
-}
-
-# Check if a worksheet named "PublicFolderMailboxes" already exists, and remove it if it does
-$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolderMailboxes"]
-if ($existingWorksheet) {
-    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
-}
-
-# Add a new worksheet for public folder mailboxes
-$publicFolderSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolderMailboxes")
-
-# Add headers
-$publicFolderSheet.Cells[1, 1].Value = "Mailbox Name"
-$publicFolderSheet.Cells[1, 2].Value = "Alias"
-$publicFolderSheet.Cells[1, 3].Value = "Email Addresses"
-
-# Fill the sheet with the public folder mailboxes data
-$row = 2
-foreach ($mailbox in $publicFolderMailboxes) {
-    $publicFolderSheet.Cells[$row, 1].Value = $mailbox.MailboxName
-    $publicFolderSheet.Cells[$row, 2].Value = $mailbox.Alias
-    $publicFolderSheet.Cells[$row, 3].Value = $mailbox.EmailAddresses
-    $row++
-}
-
-# Export public folder mailboxes to Excel
-$publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolderMailboxes" -Title "Public Folder Mailboxes with Aliases and Email Addresses" -BoldTopRow -PassThru | Out-Null
-
-
-
-
 # List of distribution lists with members
 Write-Host "Fetching Distribution Group lists with members..."
 $distributionLists = Get-DistributionGroup | foreach {
@@ -224,15 +136,12 @@ $distributionLists = Get-DistributionGroup | foreach {
     }
 }
 
-
 # Export distribution lists with members to Excel
 $distributionLists | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[3] -Title "Distribution Lists with Members" -BoldTopRow -PassThru  | Out-Null
 
-
 # List of all Teams and Groups with their members
-$teamsGroups = @()
 Write-Host "Fetching Teams and Groups lists with members..."
-
+$teamsGroups = @()
 
 # Get all Microsoft 365 groups
 $teamsAndGroups = Get-AzureADGroup -All $true | 
@@ -284,10 +193,8 @@ foreach ($group in $teamsAndGroupsWithMembers) {
     $row++
 }
 
-
 # Export Teams and Groups with members to Excel
 $teamsGroups | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[4] -Title "Teams and Groups with Members" -BoldTopRow -PassThru | Out-Null
-
 
 Write-Host "Fetching Security Groups list with members..."
 
@@ -341,18 +248,100 @@ foreach ($group in $securityGroupsWithMembers) {
     $row++
 }
 
+# List of all public folder mailboxes
+Write-Host "Fetching Public Folder Mailboxes..."
+$publicFolderMailboxes = Get-Mailbox -PublicFolder | Select-Object DisplayName, Alias, PrimarySmtpAddress
 
-# Save the Excel package
-$excelPackage.SaveAs($filePath)
+# Export public folder mailboxes to Excel
+$publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[6] -Title "Public Folder Mailboxes" -BoldTopRow -PassThru | Out-Null
 
-Write-Host "Excel file created: $filePath"
+# Recursive function to get all public folders and their child folders
+function Get-PublicFolderTree {
+    param (
+        [string]$ParentFolderPath = "\",  # Start from the root folder
+        [int]$ParentId = 0,              # Parent ID for progress tracking
+        [ref]$FolderIndex = 0            # Reference variable to track the folder index
+    )
+    
+    # Get the public folders under the specified parent folder
+    $publicFolders = Get-PublicFolder -Identity $ParentFolderPath -Recurse -ResultSize Unlimited | Select-Object Name, Identity, MailEnabled, ParentPath
+    
+    $folderData = @()
 
-# Prompt to open the file
-$openFile = Read-Host "Do you want to open the file now? (yes/no)"
+    $totalFolders = $publicFolders.Count
 
-if ($openFile -eq "yes" -or $openFile -eq "y" -or $openFile -eq "ye") {
-    Invoke-Item $filePath
+    foreach ($folder in $publicFolders) {
+        # Increment the folder index
+        $FolderIndex.Value++
+
+        # Display progress
+        $progressPercent = [math]::Round(($FolderIndex.Value / ($totalFolders + $ParentId)) * 100)
+        Write-Progress -Activity "Fetching Public Folders" -Status "Processing $($folder.Identity)" -PercentComplete $progressPercent
+
+        # Add folder information to the array
+        $folderData += [PSCustomObject]@{
+            "FolderName"     = $folder.Name
+            "FolderPath"     = $folder.Identity
+            "ParentPath"     = $folder.ParentPath
+            "MailEnabled"    = if ($folder.MailEnabled) { "Yes" } else { "No" }
+            "MailAddresses"  = if ($folder.MailEnabled) { ($folder.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', ' } else { "N/A" }
+        }
+        
+        # Recursively get child folders if any
+        $childFolders = Get-PublicFolderTree -ParentFolderPath $folder.Identity -ParentId $FolderIndex.Value -FolderIndex ([ref]$FolderIndex.Value)
+        if ($childFolders) {
+            $folderData += $childFolders
+        }
+    }
+    
+    return $folderData
 }
 
-# Stop the transcript to end the logging
+Write-Host "Fetching Public Folders and their child folders recursively..."
+$FolderIndex = 0
+$publicFolders = Get-PublicFolderTree -FolderIndex ([ref]$FolderIndex)
+
+# Check if a worksheet named "PublicFolders" already exists, and remove it if it does
+$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolders"]
+if ($existingWorksheet) {
+    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
+}
+
+# Add a new worksheet for public folders
+$publicFoldersSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolders")
+
+# Add headers
+$publicFoldersSheet.Cells[1, 1].Value = "Folder Name"
+$publicFoldersSheet.Cells[1, 2].Value = "Folder Path"
+$publicFoldersSheet.Cells[1, 3].Value = "Parent Path"
+$publicFoldersSheet.Cells[1, 4].Value = "Mail Enabled"
+$publicFoldersSheet.Cells[1, 5].Value = "Mail Addresses"
+
+# Fill the sheet with the public folders data
+$row = 2
+foreach ($folder in $publicFolders) {
+    $publicFoldersSheet.Cells[$row, 1].Value = $folder.FolderName
+    $publicFoldersSheet.Cells[$row, 2].Value = $folder.FolderPath
+    $publicFoldersSheet.Cells[$row, 3].Value = $folder.ParentPath
+    $publicFoldersSheet.Cells[$row, 4].Value = $folder.MailEnabled
+    $publicFoldersSheet.Cells[$row, 5].Value = $folder.MailAddresses
+    $row++
+}
+
+# Export public folders to Excel
+$publicFolders | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolders" -Title "Public Folders and Child Folders" -BoldTopRow -PassThru | Out-Null
+
+# Save the Excel file
+$excelPackage.SaveAs($filePath)
+
+Write-Host "Export completed. The file has been saved to $filePath"
+
+# Stop the transcript
 Stop-Transcript
+
+# Prompt the user to open the Excel file
+$openFile = Read-Host "Do you want to open the Excel file now? (y/n)"
+if ($openFile -eq "y") {
+    Start-Process $filePath
+}
+
