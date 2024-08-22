@@ -1,7 +1,7 @@
 ﻿# Notes: To come in future release:
 # 
 # 1. Better Definitions for "Type" of teams group
-#
+# 2. Fix the Teams stuff because it's broken currently
 #
 # ------------------------------------------------------------------------------------------------------------
 #
