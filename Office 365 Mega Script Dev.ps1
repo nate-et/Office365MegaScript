@@ -90,7 +90,14 @@ $worksheets | ForEach-Object {
 
 # List of shared mailboxes with any mailbox access
 Write-Host "Fetching Shared Mailboxes lists with members..."
-$sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
+$sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox
+$totalSharedMailboxes = $sharedMailboxes.Count
+$currentSharedMailbox = 0
+$sharedMailboxesData = $sharedMailboxes | foreach {
+    $currentSharedMailbox++
+    $progressPercent = [math]::Round(($currentSharedMailbox / $totalSharedMailboxes) * 100)
+    Write-Progress -Activity "Fetching Shared Mailboxes" -Status "Processing $($_.DisplayName)" -PercentComplete $progressPercent
+    
     $mailbox = $_.DisplayName
     $accesses = @()
     
@@ -112,11 +119,18 @@ $sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
 }
 
 # Export shared mailboxes with delegated mailbox access to Excel
-$sharedMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[2] -Title "Shared Mailboxes with Delegated Access" -BoldTopRow -PassThru  | Out-Null
+$sharedMailboxesData | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[2] -Title "Shared Mailboxes with Delegated Access" -BoldTopRow -PassThru | Out-Null
 
 # List of distribution lists with members
 Write-Host "Fetching Distribution Group lists with members..."
-$distributionLists = Get-DistributionGroup | foreach {
+$distributionLists = Get-DistributionGroup
+$totalDistributionLists = $distributionLists.Count
+$currentDistributionList = 0
+$distributionListsData = $distributionLists | foreach {
+    $currentDistributionList++
+    $progressPercent = [math]::Round(($currentDistributionList / $totalDistributionLists) * 100)
+    Write-Progress -Activity "Fetching Distribution Lists" -Status "Processing $($_.DisplayName)" -PercentComplete $progressPercent
+    
     $groupName = $_.DisplayName
     $members = Get-DistributionGroupMember -Identity $_.Identity -ErrorAction SilentlyContinue
     if ($members) {
@@ -137,7 +151,7 @@ $distributionLists = Get-DistributionGroup | foreach {
 }
 
 # Export distribution lists with members to Excel
-$distributionLists | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[3] -Title "Distribution Lists with Members" -BoldTopRow -PassThru  | Out-Null
+$distributionListsData | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[3] -Title "Distribution Lists with Members" -BoldTopRow -PassThru | Out-Null
 
 # List of all Teams and Groups with their members
 Write-Host "Fetching Teams and Groups lists with members..."
@@ -148,11 +162,18 @@ $teamsAndGroups = Get-AzureADGroup -All $true |
                     Where-Object { $_.GroupTypes -contains "Unified" } | 
                     Select-Object DisplayName, Description, ObjectId
 
+$totalTeamsAndGroups = $teamsAndGroups.Count
+$currentTeamOrGroup = 0
+
 # Create an array to store teams and groups information
 $teamsAndGroupsWithMembers = @()
 
 # Iterate through each team/group
 foreach ($group in $teamsAndGroups) {
+    $currentTeamOrGroup++
+    $progressPercent = [math]::Round(($currentTeamOrGroup / $totalTeamsAndGroups) * 100)
+    Write-Progress -Activity "Fetching Teams and Groups" -Status "Processing $($group.DisplayName)" -PercentComplete $progressPercent
+    
     # Fetch members of the current team/group
     $groupMembers = Get-AzureADGroupMember -All $true -ObjectId $group.ObjectId | 
                     Select-Object -ExpandProperty DisplayName
@@ -170,14 +191,9 @@ foreach ($group in $teamsAndGroups) {
     }
 }
 
-# Check if a worksheet named "Teams_And_Groups" already exists, and remove it if it does
-$existingWorksheet = $excelPackage.Workbook.Worksheets["Teams_And_Groups"]
-if ($existingWorksheet) {
-    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
-}
-
 # Add a new worksheet for teams and groups
-$teamsAndGroupsSheet = $excelPackage.Workbook.Worksheets.Add("Teams_And_Groups")
+$teamsAndGroupsSheet = $excelPackage.Workbook.Worksheets["Teams_And_Groups"]
+$teamsAndGroupsSheet.Cells.Clear()
 
 # Add headers
 $teamsAndGroupsSheet.Cells[1, 1].Value = "Group Display Name"
@@ -203,11 +219,18 @@ $securityGroups = Get-AzureADGroup -All $true |
                     Where-Object { $_.SecurityEnabled -eq $true } | 
                     Select-Object DisplayName, Description, ObjectId
 
+$totalSecurityGroups = $securityGroups.Count
+$currentSecurityGroup = 0
+
 # Create an array to store security group information
 $securityGroupsWithMembers = @()
 
 # Iterate through each security group
 foreach ($group in $securityGroups) {
+    $currentSecurityGroup++
+    $progressPercent = [math]::Round(($currentSecurityGroup / $totalSecurityGroups) * 100)
+    Write-Progress -Activity "Fetching Security Groups" -Status "Processing $($group.DisplayName)" -PercentComplete $progressPercent
+    
     # Fetch members of the current security group
     $groupMembers = Get-AzureADGroupMember -All $true -ObjectId $group.ObjectId | 
                     Select-Object -ExpandProperty DisplayName
@@ -225,21 +248,16 @@ foreach ($group in $securityGroups) {
     }
 }
 
-# Check if a worksheet named "Security_Groups" already exists, and remove it if it does
-$existingWorksheet = $excelPackage.Workbook.Worksheets["Security_Groups"]
-if ($existingWorksheet) {
-    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
-}
-
 # Add a new worksheet for security groups
-$securityGroupsSheet = $excelPackage.Workbook.Worksheets.Add("Security_Groups")
+$securityGroupsSheet = $excelPackage.Workbook.Worksheets["Security_Groups"]
+$securityGroupsSheet.Cells.Clear()
 
 # Add headers
 $securityGroupsSheet.Cells[1, 1].Value = "Group Display Name"
 $securityGroupsSheet.Cells[1, 2].Value = "Group Member"
 $securityGroupsSheet.Cells[1, 3].Value = "Group Description"
 
-# Fill the sheet with the security groups data
+# Fill the sheet with the security group data
 $row = 2
 foreach ($group in $securityGroupsWithMembers) {
     $securityGroupsSheet.Cells[$row, 1].Value = $group.GroupDisplayName
@@ -248,14 +266,30 @@ foreach ($group in $securityGroupsWithMembers) {
     $row++
 }
 
-# List of all public folder mailboxes
+# Export Security Groups to Excel
+$securityGroupsWithMembers | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[5] -Title "Security Groups with Members" -BoldTopRow -PassThru | Out-Null
+
 Write-Host "Fetching Public Folder Mailboxes..."
-$publicFolderMailboxes = Get-Mailbox -PublicFolder | Select-Object DisplayName, Alias, PrimarySmtpAddress
+$publicFolderMailboxes = Get-Mailbox -PublicFolder
+$totalPublicFolderMailboxes = $publicFolderMailboxes.Count
+$currentPublicFolderMailbox = 0
 
-# Export public folder mailboxes to Excel
-$publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[6] -Title "Public Folder Mailboxes" -BoldTopRow -PassThru | Out-Null
+$publicFolderMailboxesData = $publicFolderMailboxes | foreach {
+    $currentPublicFolderMailbox++
+    $progressPercent = [math]::Round(($currentPublicFolderMailbox / $totalPublicFolderMailboxes) * 100)
+    Write-Progress -Activity "Fetching Public Folder Mailboxes" -Status "Processing $($_.DisplayName)" -PercentComplete $progressPercent
+    
+    [PSCustomObject]@{
+        "MailboxName" = $_.Name
+        "PrimarySMTP" = $_.PrimarySmtpAddress
+        "Alias" = $_.Alias
+    }
+}
 
-# Recursive function to get all public folders and their child folders
+# Export Public Folder Mailboxes to Excel
+$publicFolderMailboxesData | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[6] -Title "Public Folder Mailboxes" -BoldTopRow -PassThru | Out-Null
+
+# Define function to get all public folders and their child folders
 function Get-PublicFolderTree {
     param (
         [string]$ParentFolderPath = "\",  # Start from the root folder
@@ -308,7 +342,7 @@ if ($existingWorksheet) {
 }
 
 # Add a new worksheet for public folders
-$publicFoldersSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolders")
+$publicFoldersSheet = $excelPackage.Workbook.Worksheets["PublicFolders"]
 
 # Add headers
 $publicFoldersSheet.Cells[1, 1].Value = "Folder Name"
@@ -329,7 +363,7 @@ foreach ($folder in $publicFolders) {
 }
 
 # Export public folders to Excel
-$publicFolders | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolders" -Title "Public Folders and Child Folders" -BoldTopRow -PassThru | Out-Null
+$publicFolders | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[7] -Title "Public Folders and Child Folders" -BoldTopRow -PassThru | Out-Null
 
 # Save the Excel file
 $excelPackage.SaveAs($filePath)
