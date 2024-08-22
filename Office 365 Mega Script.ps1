@@ -200,7 +200,7 @@ foreach ($mailbox in $publicFolderMailboxes) {
 $publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolderMailboxes" -Title "Public Folder Mailboxes with Aliases and Email Addresses" -BoldTopRow -PassThru | Out-Null
 
 # List of public folder mailboxes with their aliases and email addresses
-Write-Host "Fetching Public Folder Mailboxes list with aliases and email addresses..."
+Write-Host "Fetching Public Folder hierarchy..."
 # [Existing code]
 
 # Recursive function to get all public folders and their child folders
