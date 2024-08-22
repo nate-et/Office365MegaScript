@@ -199,6 +199,71 @@ foreach ($mailbox in $publicFolderMailboxes) {
 # Export public folder mailboxes to Excel
 $publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolderMailboxes" -Title "Public Folder Mailboxes with Aliases and Email Addresses" -BoldTopRow -PassThru | Out-Null
 
+# List of public folder mailboxes with their aliases and email addresses
+Write-Host "Fetching Public Folder Mailboxes list with aliases and email addresses..."
+# [Existing code]
+
+# Recursive function to get all public folders and their child folders
+function Get-PublicFolderTree {
+    param (
+        [string]$ParentFolderPath = "\\"
+    )
+    
+    # Get all child public folders for the current parent path
+    $publicFolders = Get-PublicFolder -Identity $ParentFolderPath -Recurse | Select-Object Name, Identity, MailEnabled, ParentPath
+    
+    $folderData = @()
+    
+    foreach ($folder in $publicFolders) {
+        # Add folder information to the array
+        $folderData += [PSCustomObject]@{
+            "FolderName"     = $folder.Name
+            "FolderPath"     = $folder.Identity
+            "ParentPath"     = $folder.ParentPath
+            "MailEnabled"    = if ($folder.MailEnabled) { "Yes" } else { "No" }
+            "MailAddresses"  = if ($folder.MailEnabled) { ($folder.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', ' } else { "N/A" }
+        }
+        
+        # Recursively get child folders
+        $folderData += Get-PublicFolderTree -ParentFolderPath $folder.Identity
+    }
+    
+    return $folderData
+}
+
+Write-Host "Fetching Public Folders and their child folders recursively..."
+$publicFolders = Get-PublicFolderTree
+
+# Check if a worksheet named "PublicFolders" already exists, and remove it if it does
+$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolders"]
+if ($existingWorksheet) {
+    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
+}
+
+# Add a new worksheet for public folders
+$publicFoldersSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolders")
+
+# Add headers
+$publicFoldersSheet.Cells[1, 1].Value = "Folder Name"
+$publicFoldersSheet.Cells[1, 2].Value = "Folder Path"
+$publicFoldersSheet.Cells[1, 3].Value = "Parent Path"
+$publicFoldersSheet.Cells[1, 4].Value = "Mail Enabled"
+$publicFoldersSheet.Cells[1, 5].Value = "Mail Addresses"
+
+# Fill the sheet with the public folders data
+$row = 2
+foreach ($folder in $publicFolders) {
+    $publicFoldersSheet.Cells[$row, 1].Value = $folder.FolderName
+    $publicFoldersSheet.Cells[$row, 2].Value = $folder.FolderPath
+    $publicFoldersSheet.Cells[$row, 3].Value = $folder.ParentPath
+    $publicFoldersSheet.Cells[$row, 4].Value = $folder.MailEnabled
+    $publicFoldersSheet.Cells[$row, 5].Value = $folder.MailAddresses
+    $row++
+}
+
+# Export public folders to Excel
+$publicFolders | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolders" -Title "Public Folders and Child Folders" -BoldTopRow -PassThru | Out-Null
+
 # List of distribution lists with members
 Write-Host "Fetching Distribution Group lists with members..."
 $distributionLists = Get-DistributionGroup | foreach {
