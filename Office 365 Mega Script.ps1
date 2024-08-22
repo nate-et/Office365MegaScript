@@ -206,11 +206,11 @@ Write-Host "Fetching Public Folder Mailboxes list with aliases and email address
 # Recursive function to get all public folders and their child folders
 function Get-PublicFolderTree {
     param (
-        [string]$ParentFolderPath = "\\"
+        [string]$ParentFolderPath = "\"  # Start from the root folder
     )
     
-    # Get all child public folders for the current parent path
-    $publicFolders = Get-PublicFolder -Identity $ParentFolderPath -Recurse | Select-Object Name, Identity, MailEnabled, ParentPath
+    # Get the public folders under the specified parent folder
+    $publicFolders = Get-PublicFolder -Identity $ParentFolderPath -Recurse -ResultSize Unlimited | Select-Object Name, Identity, MailEnabled, ParentPath
     
     $folderData = @()
     
@@ -224,8 +224,11 @@ function Get-PublicFolderTree {
             "MailAddresses"  = if ($folder.MailEnabled) { ($folder.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', ' } else { "N/A" }
         }
         
-        # Recursively get child folders
-        $folderData += Get-PublicFolderTree -ParentFolderPath $folder.Identity
+        # Recursively get child folders if any
+        $childFolders = Get-PublicFolderTree -ParentFolderPath $folder.Identity
+        if ($childFolders) {
+            $folderData += $childFolders
+        }
     }
     
     return $folderData
