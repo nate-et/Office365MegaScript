@@ -1,15 +1,12 @@
-﻿# Notes: To come in future release:
+# Notes: To come in future release:
 # 
 # 1. Better Definitions for "Type" of teams group
-# 2. Fix the Teams stuff because it's broken currently
+#
 #
 # ------------------------------------------------------------------------------------------------------------
 #
 #
 # Change List
-#
-# (2.4.0)
-# 1. Added Public Folder functionality
 #
 # (2.3.0)
 # 1. Added Membership for Security Groups rather than just names
@@ -102,7 +99,7 @@ Write-Host "Fetching User Mailboxes with Delegated Access list..."
 $userMailboxes = Get-Mailbox | foreach {
     $mailbox = $_.DisplayName
     $accesses = @()
-    
+
     # Fetch all mailbox permissions
     $permissions = Get-MailboxPermission -Identity $_.Identity -ErrorAction SilentlyContinue
     if ($permissions) {
@@ -116,7 +113,7 @@ $userMailboxes = Get-Mailbox | foreach {
     } else {
         Write-Host "No mailbox access found for mailbox: $mailbox"
     }
-    
+
     $accesses
 }
 
@@ -142,7 +139,7 @@ Write-Host "Fetching Shared Mailboxes lists with members..."
 $sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
     $mailbox = $_.DisplayName
     $accesses = @()
-    
+
     # Fetch all mailbox permissions
     $permissions = Get-MailboxPermission -Identity $_.Identity -ErrorAction SilentlyContinue
     if ($permissions) {
@@ -156,116 +153,12 @@ $sharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox | foreach {
     } else {
         Write-Host "No mailbox access found for shared mailbox: $mailbox"
     }
-    
+
     $accesses
 }
 
 # Export shared mailboxes with delegated mailbox access to Excel
 $sharedMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName $worksheets[2] -Title "Shared Mailboxes with Delegated Access" -BoldTopRow -PassThru  | Out-Null
-
-# List of public folder mailboxes with their aliases and email addresses
-Write-Host "Fetching Public Folder Mailboxes list with aliases and email addresses..."
-$publicFolderMailboxes = Get-Mailbox -PublicFolder | foreach {
-    [PSCustomObject]@{
-        "MailboxName" = $_.DisplayName
-        "Alias" = $_.Alias
-        "EmailAddresses" = ($_.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', '  # Filter SMTP addresses and join them into a single string
-    }
-}
-
-# Check if a worksheet named "PublicFolderMailboxes" already exists, and remove it if it does
-$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolderMailboxes"]
-if ($existingWorksheet) {
-    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
-}
-
-# Add a new worksheet for public folder mailboxes
-$publicFolderSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolderMailboxes")
-
-# Add headers
-$publicFolderSheet.Cells[1, 1].Value = "Mailbox Name"
-$publicFolderSheet.Cells[1, 2].Value = "Alias"
-$publicFolderSheet.Cells[1, 3].Value = "Email Addresses"
-
-# Fill the sheet with the public folder mailboxes data
-$row = 2
-foreach ($mailbox in $publicFolderMailboxes) {
-    $publicFolderSheet.Cells[$row, 1].Value = $mailbox.MailboxName
-    $publicFolderSheet.Cells[$row, 2].Value = $mailbox.Alias
-    $publicFolderSheet.Cells[$row, 3].Value = $mailbox.EmailAddresses
-    $row++
-}
-
-# Export public folder mailboxes to Excel
-$publicFolderMailboxes | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolderMailboxes" -Title "Public Folder Mailboxes with Aliases and Email Addresses" -BoldTopRow -PassThru | Out-Null
-
-# List of public folder mailboxes with their aliases and email addresses
-Write-Host "Fetching Public Folder hierarchy..."
-# [Existing code]
-
-# Recursive function to get all public folders and their child folders
-function Get-PublicFolderTree {
-    param (
-        [string]$ParentFolderPath = "\"  # Start from the root folder
-    )
-    
-    # Get the public folders under the specified parent folder
-    $publicFolders = Get-PublicFolder -Identity $ParentFolderPath -Recurse -ResultSize Unlimited | Select-Object Name, Identity, MailEnabled, ParentPath
-    
-    $folderData = @()
-    
-    foreach ($folder in $publicFolders) {
-        # Add folder information to the array
-        $folderData += [PSCustomObject]@{
-            "FolderName"     = $folder.Name
-            "FolderPath"     = $folder.Identity
-            "ParentPath"     = $folder.ParentPath
-            "MailEnabled"    = if ($folder.MailEnabled) { "Yes" } else { "No" }
-            "MailAddresses"  = if ($folder.MailEnabled) { ($folder.EmailAddresses | Where-Object { $_ -like 'SMTP:*' }) -join ', ' } else { "N/A" }
-        }
-        
-        # Recursively get child folders if any
-        $childFolders = Get-PublicFolderTree -ParentFolderPath $folder.Identity
-        if ($childFolders) {
-            $folderData += $childFolders
-        }
-    }
-    
-    return $folderData
-}
-
-Write-Host "Fetching Public Folders and their child folders recursively..."
-$publicFolders = Get-PublicFolderTree
-
-# Check if a worksheet named "PublicFolders" already exists, and remove it if it does
-$existingWorksheet = $excelPackage.Workbook.Worksheets["PublicFolders"]
-if ($existingWorksheet) {
-    $excelPackage.Workbook.Worksheets.Delete($existingWorksheet)
-}
-
-# Add a new worksheet for public folders
-$publicFoldersSheet = $excelPackage.Workbook.Worksheets.Add("PublicFolders")
-
-# Add headers
-$publicFoldersSheet.Cells[1, 1].Value = "Folder Name"
-$publicFoldersSheet.Cells[1, 2].Value = "Folder Path"
-$publicFoldersSheet.Cells[1, 3].Value = "Parent Path"
-$publicFoldersSheet.Cells[1, 4].Value = "Mail Enabled"
-$publicFoldersSheet.Cells[1, 5].Value = "Mail Addresses"
-
-# Fill the sheet with the public folders data
-$row = 2
-foreach ($folder in $publicFolders) {
-    $publicFoldersSheet.Cells[$row, 1].Value = $folder.FolderName
-    $publicFoldersSheet.Cells[$row, 2].Value = $folder.FolderPath
-    $publicFoldersSheet.Cells[$row, 3].Value = $folder.ParentPath
-    $publicFoldersSheet.Cells[$row, 4].Value = $folder.MailEnabled
-    $publicFoldersSheet.Cells[$row, 5].Value = $folder.MailAddresses
-    $row++
-}
-
-# Export public folders to Excel
-$publicFolders | Export-Excel -ExcelPackage $excelPackage -WorksheetName "PublicFolders" -Title "Public Folders and Child Folders" -BoldTopRow -PassThru | Out-Null
 
 # List of distribution lists with members
 Write-Host "Fetching Distribution Group lists with members..."
