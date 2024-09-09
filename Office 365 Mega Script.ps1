@@ -61,7 +61,13 @@ Import-Module ImportExcel
 #$credential = Get-Credential -Message "Enter your Exchange Online admin credentials"
 
 
-Write-Host "Connecting To Exchange Online, AzureAD & MsolService..."
+Write-Host "Establishing Connection To Exchange Online, AzureAD & MsolService..."
+Start-Sleep 2
+
+Write-Host "Connecting, You will be prompted several times to sign in, this is expected..."
+
+Start-Sleep 1
+
 # Connect to Required Modules
 Connect-ExchangeOnline #-Credential $credential
 Connect-AzureAD #-Credential $credential
