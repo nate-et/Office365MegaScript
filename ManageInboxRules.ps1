@@ -10,51 +10,66 @@ Import-Module ExchangeOnlineManagement
 Write-Host "Logging in to Exchange Online..." -ForegroundColor Yellow
 $session = Connect-ExchangeOnline -ShowProgress $true
 
-# Prompt for the user's email address
-$userEmail = Read-Host "Enter the email address of the user"
+# Function to prompt for a user and fetch their rules
+function Select-User {
+    param (
+        [string]$CurrentUser = ""
+    )
+    if ($CurrentUser) {
+        Write-Host "`nCurrent selected user: $CurrentUser" -ForegroundColor Cyan
+    }
+    $newUserEmail = Read-Host "Enter the email address of the user you want to manage"
+    return $newUserEmail
+}
 
+# Function to fetch and display inbox rules
 function List-Rules {
-    # Retrieve and display all inbox rules, including hidden ones, for the specified user
-    Write-Host "`nFetching inbox rules (including hidden rules) for ${userEmail}..." -ForegroundColor Cyan
-    $rules = Get-InboxRule -Mailbox $userEmail -IncludeHidden
+    param (
+        [string]$Mailbox
+    )
+    Write-Host "`nFetching inbox rules (including hidden rules) for ${Mailbox}..." -ForegroundColor Cyan
+    $rules = Get-InboxRule -Mailbox $Mailbox -IncludeHidden
 
     if ($rules.Count -eq 0) {
-        Write-Host "No inbox rules found for ${userEmail}." -ForegroundColor Red
+        Write-Host "No inbox rules found for ${Mailbox}." -ForegroundColor Red
         return $null
     }
 
-    Write-Host "`nDetailed Inbox Rules for ${userEmail} (including hidden rules):" -ForegroundColor Green
+    Write-Host "`nDetailed Inbox Rules for ${Mailbox} (including hidden rules):" -ForegroundColor Green
     $rules | Select-Object Name, Description, Enabled, RedirectTo, MoveToFolder, ForwardTo | Format-List
     return $rules
 }
 
-# Initial listing of rules
-$rules = List-Rules
+# Initialize the selected user
+$currentUser = Select-User
+$rules = List-Rules -Mailbox $currentUser
 if (-not $rules) {
     Disconnect-ExchangeOnline -Confirm:$false
     exit
 }
 
-# Allow user to manage rules
+# Persistent loop for managing rules
 while ($true) {
-    Write-Host "`nWhat would you like to do?"
+    Write-Host "`nCurrent selected user: $currentUser" -ForegroundColor Cyan
+    Write-Host "What would you like to do?"
     Write-Host "1. Enable a rule"
     Write-Host "2. Disable a rule"
     Write-Host "3. Delete a rule"
     Write-Host "4. List rules again"
-    Write-Host "5. Exit"
+    Write-Host "5. Change user"
+    Write-Host "6. Exit"
 
-    $choice = Read-Host "Enter your choice (1/2/3/4/5)"
+    $choice = Read-Host "Enter your choice (1/2/3/4/5/6)"
 
     switch ($choice) {
         1 {
             $ruleID = Read-Host "Enter the ID of the rule to enable"
-            Set-InboxRule -Mailbox $userEmail -Identity $ruleID -Enabled $true
+            Set-InboxRule -Mailbox $currentUser -Identity $ruleID -Enabled $true
             Write-Host "Rule [$ruleID] has been enabled." -ForegroundColor Green
         }
         2 {
             $ruleID = Read-Host "Enter the ID of the rule to disable"
-            Set-InboxRule -Mailbox $userEmail -Identity $ruleID -Enabled $false
+            Set-InboxRule -Mailbox $currentUser -Identity $ruleID -Enabled $false
             Write-Host "Rule [$ruleID] has been disabled." -ForegroundColor Green
         }
         3 {
@@ -73,14 +88,23 @@ while ($true) {
                 continue
             }
 
-            Remove-InboxRule -Mailbox $userEmail -Identity $ruleID -Confirm:$false
+            Remove-InboxRule -Mailbox $currentUser -Identity $ruleID -Confirm:$false
             Write-Host "Rule [$ruleID] has been PERMANENTLY deleted." -ForegroundColor Green
         }
         4 {
             # Re-list the rules
-            $rules = List-Rules
+            $rules = List-Rules -Mailbox $currentUser
         }
         5 {
+            # Change the selected user
+            $currentUser = Select-User -CurrentUser $currentUser
+            $rules = List-Rules -Mailbox $currentUser
+            if (-not $rules) {
+                Disconnect-ExchangeOnline -Confirm:$false
+                exit
+            }
+        }
+        6 {
             Write-Host "Exiting..." -ForegroundColor Yellow
             break
         }
