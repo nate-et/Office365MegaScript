@@ -106,13 +106,11 @@ while ($true) {
         }
         6 {
             Write-Host "Exiting..." -ForegroundColor Yellow
-            break
+            Disconnect-ExchangeOnline -Confirm:$false
+            exit
         }
         Default {
             Write-Host "Invalid choice. Please try again." -ForegroundColor Red
         }
     }
 }
-
-# Disconnect from Exchange Online
-Disconnect-ExchangeOnline -Confirm:$false

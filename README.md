@@ -1,2 +1,2 @@
 # Office365MegaScript
-My attempt at an all encombasing mega tool that will do anything you need in an Office 365 Tenant. 
+This is a collection of scripts that I have cobbled together to tackle odd problems.
