@@ -22,7 +22,7 @@ function Select-User {
     return $newUserEmail
 }
 
-# Function to fetch and display inbox rules
+# Function to fetch and display inbox rules, with error handling for any corrupt rules
 function List-Rules {
     param (
         [string]$Mailbox
@@ -36,7 +36,16 @@ function List-Rules {
     }
 
     Write-Host "`nDetailed Inbox Rules for ${Mailbox} (including hidden rules):" -ForegroundColor Green
-    $rules | Select-Object Name, Description, Enabled, RedirectTo, MoveToFolder, ForwardTo | Format-List
+    foreach ($rule in $rules) {
+        try {
+            # Display each rule and handle errors for specific problematic rules
+            $rule | Select-Object Name, Description, Enabled, RedirectTo, MoveToFolder, ForwardTo | Format-List
+        }
+        catch {
+            Write-Host "Error fetching rule '$($rule.Name)': $_" -ForegroundColor Red
+        }
+    }
+
     return $rules
 }
 
